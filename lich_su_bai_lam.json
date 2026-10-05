@@ -1,0 +1,26 @@
+[
+    {
+        "time": "2026-09-29 22:04:11",
+        "title": "Cam 18 - Test 1",
+        "type": "Reading",
+        "correct": "18/40",
+        "score": 5.0,
+        "duration": "60 phút",
+        "types": [
+            "True / False / Not Given",
+            "Yes / No / Not Given",
+            "Matching Headings",
+            "Matching Information / Features",
+            "Multiple Choice",
+            "Gap Filling (Summary/Notes/Sentence)"
+        ],
+        "errors": [
+            6,
+            5,
+            0,
+            0,
+            9,
+            2
+        ]
+    }
+]
