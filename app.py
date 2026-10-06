@@ -11,6 +11,24 @@ st.set_page_config(
 
 DATA_FILE = "lich_su_bai_lam.json"
 
+# Danh sách dạng bài chuẩn
+READING_TYPES = [
+    "True / False / Not Given",
+    "Yes / No / Not Given",
+    "Matching Headings",
+    "Matching Info / Features",
+    "Multiple Choice",
+    "Gap Fill (Summary/Notes/Sentence)",
+]
+
+LISTENING_TYPES = [
+    "Form / Note / Table Completion",
+    "Multiple Choice",
+    "Matching Options / Features",
+    "Map / Plan / Diagram Labelling",
+    "Short Answer Questions",
+]
+
 READING_PARTS = ["Passage 1", "Passage 2", "Passage 3"]
 LISTENING_PARTS = ["Part 1", "Part 2", "Part 3", "Part 4"]
 
@@ -80,21 +98,46 @@ with col_left:
     note = st.text_input("5. Ghi chú / Từ vựng cần nhớ")
 
     st.markdown("---")
-    st.markdown("**6. Số câu sai theo từng phần:**")
-
+    
+    # Chọn danh sách Parts/Passages và Types theo kỹ năng
     current_parts = READING_PARTS if skill_type == "Reading" else LISTENING_PARTS
-    errors = []
+    current_types = READING_TYPES if skill_type == "Reading" else LISTENING_TYPES
 
-    for item_part in current_parts:
-        err_val = st.number_input(
-            f"{item_part}", min_value=0, max_value=int(total_q), value=0, key=item_part
+    # Thanh chọn Passage/Part
+    selected_part = st.selectbox("6. Chọn Phần/Passage để nhập câu sai:", current_parts)
+
+    # Khởi tạo bộ nhớ tạm cho các câu sai theo từng part trong Session State
+    if "temp_errors" not in st.session_state:
+        st.session_state.temp_errors = {}
+
+    # Nhập số câu sai cho Passage đang chọn
+    st.markdown(f"**Nhập số câu sai cho [{selected_part}]:**")
+    for q_type in current_types:
+        key_name = f"{skill_type}_{selected_part}_{q_type}"
+        val = st.number_input(
+            q_type,
+            min_value=0,
+            max_value=int(total_q),
+            value=st.session_state.temp_errors.get(key_name, 0),
+            key=key_name,
         )
-        errors.append(err_val)
+        st.session_state.temp_errors[key_name] = val
 
     if st.button("Lưu Bài Làm", type="primary", use_container_width=True):
-        total_wrong = sum(errors)
+        # Tính tổng tất cả câu sai của các Part/Passage thuộc bài làm hiện tại
+        total_wrong = 0
+        detail_errors = []
+
+        for p in current_parts:
+            for t in current_types:
+                k = f"{skill_type}_{p}_{t}"
+                err_count = st.session_state.temp_errors.get(k, 0)
+                total_wrong += err_count
+                if err_count > 0:
+                    detail_errors.append({"part": p, "type": t, "count": err_count})
+
         if total_wrong > total_q:
-            st.error("Tổng số câu sai không thể vượt quá tổng số câu hỏi.")
+            st.error("Tổng số câu sai vượt quá tổng số câu hỏi.")
         else:
             correct_count = total_q - total_wrong
             score = calculate_score(correct_count, total_q)
@@ -108,12 +151,15 @@ with col_left:
                 "score": score,
                 "duration": f"{duration} phút",
                 "note": note,
-                "types": current_parts,
-                "errors": errors,
+                "total_wrong": total_wrong,
+                "details": detail_errors,
             }
 
             st.session_state.all_data.append(entry_data)
             save_data(st.session_state.all_data)
+            
+            # Xóa dữ liệu tạm
+            st.session_state.temp_errors = {}
             st.success(f"Đã lưu bài làm: {title}")
             st.rerun()
 
@@ -179,29 +225,26 @@ with col_right:
         st.subheader("Phân Bố Lỗi Sai (Lần Gần Nhất)")
         if all_data:
             latest = all_data[-1]
-            if isinstance(latest, dict):
-                types_list = latest.get("types", [])
-                errors_list = latest.get("errors", [])
+            details = latest.get("details", [])
 
-                df_pie = pd.DataFrame(
-                    {"Phần": types_list, "Số câu sai": errors_list}
+            if details:
+                df_pie = pd.DataFrame(details)
+                # Gom nhóm theo Dạng bài hoặc Passage để hiển thị
+                df_grouped = df_pie.groupby("type")["count"].sum().reset_index()
+
+                fig_pie = px.pie(
+                    df_grouped,
+                    names="type",
+                    values="count",
+                    hole=0.4,
+                    color_discrete_sequence=px.colors.qualitative.Set2,
                 )
-                df_pie = df_pie[df_pie["Số câu sai"] > 0]
-
-                if not df_pie.empty:
-                    fig_pie = px.pie(
-                        df_pie,
-                        names="Phần",
-                        values="Số câu sai",
-                        hole=0.4,
-                        color_discrete_sequence=px.colors.qualitative.Set2,
-                    )
-                    fig_pie.update_layout(
-                        height=260, margin=dict(l=10, r=10, t=10, b=10)
-                    )
-                    st.plotly_chart(fig_pie, use_container_width=True)
-                else:
-                    st.info("Bài làm gần nhất không có câu sai.")
+                fig_pie.update_layout(
+                    height=260, margin=dict(l=10, r=10, t=10, b=10)
+                )
+                st.plotly_chart(fig_pie, use_container_width=True)
+            else:
+                st.info("Bài làm gần nhất không có câu sai.")
         else:
             st.info("Chưa có dữ liệu bài làm.")
 
