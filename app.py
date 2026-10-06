@@ -1,3 +1,4 @@
+import calendar
 import json
 from datetime import datetime, timedelta
 import gspread
@@ -220,45 +221,70 @@ with col_right:
                 except Exception:
                     pass
 
-        num_weeks = 20
-        start_date = today - timedelta(
-            days=today.weekday() + (num_weeks - 1) * 7
+        # Xác định ngày đầu tiên và ngày cuối cùng của tháng hiện tại
+        first_day_of_month = today.replace(day=1)
+        _, last_day_num = calendar.monthrange(today.year, today.month)
+        last_day_of_month = today.replace(day=last_day_num)
+
+        # Căn lùi về thứ Hai của tuần chứa ngày 1
+        start_date = first_day_of_month - timedelta(
+            days=first_day_of_month.weekday()
         )
+        # Căn tiến đến Chủ Nhật của tuần chứa ngày cuối tháng
+        end_date = last_day_of_month + timedelta(
+            days=(6 - last_day_of_month.weekday())
+        )
+
+        num_weeks = int(((end_date - start_date).days + 1) / 7)
 
         grid_data = np.zeros((7, num_weeks))
         hover_text = []
-        x_labels = []
 
         days_of_week = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-        last_month = None
-
-        for col in range(num_weeks):
-            week_start_date = start_date + timedelta(days=col * 7)
-            current_month = week_start_date.strftime("%b")
-            if current_month != last_month:
-                x_labels.append(current_month)
-                last_month = current_month
-            else:
-                x_labels.append("")
 
         for row in range(7):
             hover_row = []
             for col in range(num_weeks):
                 d = start_date + timedelta(days=col * 7 + row)
-                cnt = day_counts.get(d, 0)
-                grid_data[row, col] = cnt
-                hover_row.append(
-                    f"{d.strftime('%Y-%m-%d')} ({days_of_week[row]}): {cnt} test(s)"
-                )
+
+                # Chỉ đếm số bài nếu ngày nằm trong tháng hiện tại
+                if d.month == today.month and d.year == today.year:
+                    cnt = day_counts.get(d, 0)
+                    grid_data[row, col] = cnt
+                    hover_row.append(
+                        f"{d.strftime('%Y-%m-%d')} ({days_of_week[row]}): {cnt} test(s)"
+                    )
+                else:
+                    # Các ngày thuộc tháng khác trong cùng tuần sẽ ẩn (đặt -1)
+                    grid_data[row, col] = -1
+                    hover_row.append(f"{d.strftime('%Y-%m-%d')} (Out of month)")
             hover_text.append(hover_row)
 
+        # Colorscale:
+        # -1 (Ngoài tháng): Nền trong suốt hoàn toàn
+        #  0 (0 bài làm): Trắng nhạt (#f8f9fa)
+        #  1 bài: Xanh nhạt (#9be9a8)
+        #  2 bài: Xanh vừa (#40c463)
+        #  3 bài: Xanh đậm (#30a14e)
+        # >=4 bài: Xanh rất đậm (#216e39)
         colorscale = [
-            [0.0, "#ebedf0"],  # No practice
-            [0.25, "#9be9a8"],  # 1 test
-            [0.5, "#40c463"],  # 2 tests
-            [0.75, "#30a14e"],  # 3 tests
-            [1.0, "#216e39"],  # >=4 tests
+            [0.0, "rgba(0,0,0,0)"],
+            [0.1, "rgba(0,0,0,0)"],
+            [0.1001, "#f8f9fa"],
+            [0.2, "#f8f9fa"],
+            [0.2001, "#9be9a8"],
+            [0.4, "#9be9a8"],
+            [0.4001, "#40c463"],
+            [0.6, "#40c463"],
+            [0.6001, "#30a14e"],
+            [0.8, "#30a14e"],
+            [0.8001, "#216e39"],
+            [1.0, "#216e39"],
         ]
+
+        # Đặt tiêu đề trục X chỉ hiện đúng tên tháng hiện tại ở giữa
+        x_labels = [""] * num_weeks
+        x_labels[num_weeks // 2] = today.strftime("%b")
 
         fig_grid = go.Figure(
             data=go.Heatmap(
@@ -268,6 +294,8 @@ with col_right:
                 text=hover_text,
                 hoverinfo="text",
                 colorscale=colorscale,
+                zmin=-1,
+                zmax=4,
                 showscale=False,
                 xgap=3,
                 ygap=3,
@@ -286,7 +314,7 @@ with col_right:
                 tickfont=dict(color="#31333F", size=11),
                 scaleanchor="x",
                 scaleratio=1,
-                constrain="domain",  # Fixes padding between Y-axis labels and grid
+                constrain="domain",
             ),
             xaxis=dict(
                 showgrid=False,
@@ -295,7 +323,7 @@ with col_right:
                 tickmode="array",
                 tickvals=list(range(num_weeks)),
                 ticktext=x_labels,
-                tickfont=dict(color="#31333F", size=11),
+                tickfont=dict(color="#31333F", size=12, family="Arial Bold"),
             ),
         )
 
