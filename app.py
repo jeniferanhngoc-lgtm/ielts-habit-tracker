@@ -5,33 +5,16 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-# Cấu hình trang
 st.set_page_config(
-    page_title="IELTS Practice & Habit Tracker", page_icon="📝", layout="wide"
+    page_title="IELTS Practice & Habit Tracker", layout="wide"
 )
 
 DATA_FILE = "lich_su_bai_lam.json"
 
-# --- DANH SÁCH DẠNG BÀI ---
-READING_TYPES = [
-    "True / False / Not Given",
-    "Yes / No / Not Given",
-    "Matching Headings",
-    "Matching Info / Features",
-    "Multiple Choice",
-    "Gap Fill (Summary/Notes/Sentence)",
-]
-
-LISTENING_TYPES = [
-    "Form / Note / Table Completion",
-    "Multiple Choice",
-    "Matching Options / Features",
-    "Map / Plan / Diagram Labelling",
-    "Short Answer Questions",
-]
+READING_PARTS = ["Passage 1", "Passage 2", "Passage 3"]
+LISTENING_PARTS = ["Part 1", "Part 2", "Part 3", "Part 4"]
 
 
-# --- QUẢN LÝ DỮ LIỆU ---
 def load_data():
     if os.path.exists(DATA_FILE):
         try:
@@ -71,24 +54,18 @@ def calculate_score(correct_count, total_q):
     return round((correct_count / total_q) * 10, 1)
 
 
-# Nạp dữ liệu vào Session State
 if "all_data" not in st.session_state:
     st.session_state.all_data = load_data()
 
-# --- TIÊU ĐỀ TRANG ---
-st.title("📝 Theo Dõi Luyện Tập & Habit Tracker (IELTS)")
+st.title("Theo Dõi Luyện Tập IELTS")
 
-# Chia bố cục 2 cột: Cột trái (Nhập liệu), Cột phải (Hiển thị)
 col_left, col_right = st.columns([1, 2], gap="large")
 
-# -----------------------------------------------------
-# CỘT TRÁI: FORM NHẬP DỮ LIỆU
-# -----------------------------------------------------
 with col_left:
-    st.subheader("📝 Nhập Bài Làm")
+    st.subheader("Nhập Bài Làm")
 
     title = st.text_input("1. Tên đề bài", value="Cam 18 - Test 1")
-    skill_type = st.radio("2. Dạng kỹ năng", ["Reading", "Listening"], horizontal=True)
+    skill_type = st.radio("2. Kỹ năng", ["Reading", "Listening"], horizontal=True)
 
     col_q, col_d = st.columns(2)
     with col_q:
@@ -103,21 +80,21 @@ with col_left:
     note = st.text_input("5. Ghi chú / Từ vựng cần nhớ")
 
     st.markdown("---")
-    st.markdown("**6. Số câu sai theo từng dạng bài:**")
+    st.markdown("**6. Số câu sai theo từng phần:**")
 
-    current_types = READING_TYPES if skill_type == "Reading" else LISTENING_TYPES
+    current_parts = READING_PARTS if skill_type == "Reading" else LISTENING_PARTS
     errors = []
 
-    for item_type in current_types:
+    for item_part in current_parts:
         err_val = st.number_input(
-            f"{item_type}", min_value=0, max_value=int(total_q), value=0, key=item_type
+            f"{item_part}", min_value=0, max_value=int(total_q), value=0, key=item_part
         )
         errors.append(err_val)
 
-    if st.button("💾 Lưu Bài Làm", type="primary", use_container_width=True):
+    if st.button("Lưu Bài Làm", type="primary", use_container_width=True):
         total_wrong = sum(errors)
         if total_wrong > total_q:
-            st.error("❌ Tổng số câu sai không thể vượt quá tổng số câu hỏi!")
+            st.error("Tổng số câu sai không thể vượt quá tổng số câu hỏi.")
         else:
             correct_count = total_q - total_wrong
             score = calculate_score(correct_count, total_q)
@@ -131,25 +108,21 @@ with col_left:
                 "score": score,
                 "duration": f"{duration} phút",
                 "note": note,
-                "types": current_types,
+                "types": current_parts,
                 "errors": errors,
             }
 
             st.session_state.all_data.append(entry_data)
             save_data(st.session_state.all_data)
-            st.success(f"🎉 Đã lưu bài làm '{title}'!")
+            st.success(f"Đã lưu bài làm: {title}")
             st.rerun()
 
-# -----------------------------------------------------
-# CỘT PHẢI: HIỂN THỊ HABIT, BIỂU ĐỒ & BẢNG
-# -----------------------------------------------------
 with col_right:
     col_habit, col_chart = st.columns(2)
     all_data = st.session_state.all_data
 
-    # 1. HABIT TRACKER
     with col_habit:
-        st.subheader("🔥 Habit Tracker")
+        st.subheader("Thống Kê Luyện Tập")
 
         today = datetime.now().date()
         day_counts = {}
@@ -171,11 +144,11 @@ with col_right:
             start_of_week = today - timedelta(days=today.weekday())
             days_to_show = [start_of_week + timedelta(days=i) for i in range(7)]
             active_days = sum(1 for d in days_to_show if day_counts.get(d, 0) > 0)
-            st.caption(f"📅 Tuần này hoàn thành: **{active_days}/7** ngày")
+            st.caption(f"Tuần này hoàn thành: {active_days}/7 ngày")
         else:
             days_to_show = [(today - timedelta(days=i)) for i in range(29, -1, -1)]
             active_days = sum(1 for d in days_to_show if day_counts.get(d, 0) > 0)
-            st.caption(f"📅 30 ngày qua hoàn thành: **{active_days}/30** ngày")
+            st.caption(f"30 ngày qua hoàn thành: {active_days}/30 ngày")
 
         habit_df = pd.DataFrame(
             [
@@ -192,7 +165,7 @@ with col_right:
             x="Ngày",
             y="Số bài",
             color="Số bài",
-            color_continuous_scale="Greens",
+            color_continuous_scale="Blues",
             text_auto=True,
         )
         fig_habit.update_layout(
@@ -202,9 +175,8 @@ with col_right:
         )
         st.plotly_chart(fig_habit, use_container_width=True)
 
-    # 2. BIỂU ĐỒ LỖI SAI (PIE CHART)
     with col_chart:
-        st.subheader("📊 Biểu Đồ Lỗi Sai Lần Gần Nhất")
+        st.subheader("Phân Bố Lỗi Sai (Lần Gần Nhất)")
         if all_data:
             latest = all_data[-1]
             if isinstance(latest, dict):
@@ -212,37 +184,34 @@ with col_right:
                 errors_list = latest.get("errors", [])
 
                 df_pie = pd.DataFrame(
-                    {"Dạng bài": types_list, "Số câu sai": errors_list}
+                    {"Phần": types_list, "Số câu sai": errors_list}
                 )
                 df_pie = df_pie[df_pie["Số câu sai"] > 0]
 
                 if not df_pie.empty:
                     fig_pie = px.pie(
                         df_pie,
-                        names="Dạng bài",
+                        names="Phần",
                         values="Số câu sai",
                         hole=0.4,
-                        color_discrete_sequence=px.colors.qualitative.Pastel,
+                        color_discrete_sequence=px.colors.qualitative.Set2,
                     )
                     fig_pie.update_layout(
                         height=260, margin=dict(l=10, r=10, t=10, b=10)
                     )
                     st.plotly_chart(fig_pie, use_container_width=True)
                 else:
-                    st.balloons()
-                    st.success("🎉 Bài làm gần nhất không sai câu nào!")
+                    st.info("Bài làm gần nhất không có câu sai.")
         else:
             st.info("Chưa có dữ liệu bài làm.")
 
     st.markdown("---")
 
-    # 3. LỊCH SỬ LÀM BÀI
-    st.subheader("🗓 Lịch Sử Làm Bài")
+    st.subheader("Lịch Sử Làm Bài")
 
     if all_data:
         df_all = pd.DataFrame(all_data)
         
-        # Đảm bảo các cột cần thiết luôn tồn tại
         required_cols = ["time", "title", "type", "correct", "score", "duration", "note"]
         for col in required_cols:
             if col not in df_all.columns:
@@ -265,14 +234,14 @@ with col_right:
         with col_exp:
             json_string = json.dumps(all_data, ensure_ascii=False, indent=4)
             st.download_button(
-                label="📄 Tải Báo Cáo JSON",
+                label="Tải Báo Cáo JSON",
                 data=json_string,
                 file_name="lich_su_bai_lam.json",
                 mime="application/json",
                 use_container_width=True,
             )
         with col_del:
-            if st.button("❌ Xóa toàn bộ dữ liệu", use_container_width=True):
+            if st.button("Xóa toàn bộ dữ liệu", use_container_width=True):
                 st.session_state.all_data = []
                 save_data([])
                 st.rerun()
