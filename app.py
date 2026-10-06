@@ -220,13 +220,12 @@ with col_right:
                 except Exception:
                     pass
 
-        # Chọn khoảng thời gian xem (12 tuần gần nhất (~3 tháng) hoặc 20 tuần)
-        num_weeks = 16
+        # Hiển thị 18 tuần gần nhất (~4 tháng)
+        num_weeks = 18
         start_date = today - timedelta(
             days=today.weekday() + (num_weeks - 1) * 7
         )
 
-        days_list = [start_date + timedelta(days=i) for i in range(num_weeks * 7)]
         grid_data = np.zeros((7, num_weeks))
         hover_text = []
 
@@ -243,19 +242,18 @@ with col_right:
                 )
             hover_text.append(hover_row)
 
-        # Nhãn hiển thị tháng ở trục trên
         week_months = [
             (start_date + timedelta(days=c * 7)).strftime("%b")
             for c in range(num_weeks)
         ]
 
-        # Tùy chỉnh dải màu Cyan/Xanh lá ngọc giống ảnh mẫu LeetCode/GitHub
+        # Palette màu sáng: Nền chưa làm là màu xám nhạt, làm càng nhiều bài màu xanh/cyan càng đậm
         colorscale = [
-            [0.0, "#1f292d"],  # Màu nền tối khi chưa làm bài (0 bài)
-            [0.25, "#134e5e"],  # Xanh ngọc đậm (1 bài)
-            [0.5, "#11998e"],  # Xanh ngọc vừa (2 bài)
-            [0.75, "#00b4d8"],  # Cyan sáng (3 bài)
-            [1.0, "#00f5d4"],  # Cyan nổi bật (>3 bài)
+            [0.0, "#ebedf0"],  # Chưa làm bài (xám nhạt)
+            [0.25, "#9be9a8"],  # Xanh nhạt (1 bài)
+            [0.5, "#40c463"],   # Xanh lá vừa (2 bài)
+            [0.75, "#30a14e"],  # Xanh đậm (3 bài)
+            [1.0, "#216e39"],   # Xanh lá rất đậm (>3 bài)
         ]
 
         fig_grid = go.Figure(
@@ -267,27 +265,29 @@ with col_right:
                 hoverinfo="text",
                 colorscale=colorscale,
                 showscale=False,
-                xgap=3,  # Khoảng cách giữa các ô
+                xgap=3,  # Khoảng cách giữa các ô vuông
                 ygap=3,
             )
         )
 
         fig_grid.update_layout(
-            height=240,
-            margin=dict(l=10, r=10, t=25, b=10),
-            plot_bgcolor="#181e24",  # Màu nền tối hợp chuẩn với hình mẫu
-            paper_bgcolor="#0e1117",
+            height=200,
+            margin=dict(l=0, r=0, t=25, b=0),
+            plot_bgcolor="rgba(0,0,0,0)",   # Trong suốt khớp màu web
+            paper_bgcolor="rgba(0,0,0,0)",  # Trong suốt khớp màu web
             yaxis=dict(
                 autorange="reversed",
                 showgrid=False,
                 zeroline=False,
-                tickfont=dict(color="#8a99a8", size=11),
+                tickfont=dict(color="#31333F", size=11),
+                scaleanchor="x",  # Ép trục Y theo trục X để tạo ô vuông (Square)
+                scaleratio=1,
             ),
             xaxis=dict(
                 showgrid=False,
                 zeroline=False,
                 side="top",
-                tickfont=dict(color="#8a99a8", size=11),
+                tickfont=dict(color="#31333F", size=11),
             ),
         )
 
