@@ -10,25 +10,21 @@ st.set_page_config(
     page_title="IELTS Practice & Habit Tracker", layout="wide"
 )
 
-# Tên Google Sheet và Tab của bạn
 SHEET_NAME = "IELTS TRACKER"
 WORKSHEET_NAME = "History"
 
 
-# Kết nối Google Sheets bằng gspread chính thức
 @st.cache_resource(ttl=600)
 def get_gsheet_client():
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
     ]
-    # Lấy thông tin từ secrets
     credentials_dict = dict(st.secrets["gspread"])
     creds = Credentials.from_service_account_info(
         credentials_dict, scopes=scopes
     )
-    client = gspread.authorize(creds)
-    return client
+    return gspread.authorize(creds)
 
 
 def load_data_from_gsheets():
@@ -36,7 +32,6 @@ def load_data_from_gsheets():
         client = get_gsheet_client()
         sheet = client.open(SHEET_NAME).worksheet(WORKSHEET_NAME)
         records = sheet.get_all_records()
-
         for item in records:
             if "details" in item and isinstance(item["details"], str):
                 try:
@@ -44,8 +39,7 @@ def load_data_from_gsheets():
                 except Exception:
                     item["details"] = []
         return records
-    except Exception as e:
-        st.error(f"Lỗi khi tải dữ liệu từ Google Sheets: {e}")
+    except Exception:
         return []
 
 
@@ -53,11 +47,7 @@ def save_entry_to_gsheets(entry):
     try:
         client = get_gsheet_client()
         sheet = client.open(SHEET_NAME).worksheet(WORKSHEET_NAME)
-
-        # Chuyển mảng details thành chuỗi JSON
         details_str = json.dumps(entry.get("details", []), ensure_ascii=False)
-
-        # Chuẩn bị dòng dữ liệu đúng thứ tự các cột
         row = [
             entry.get("time", ""),
             entry.get("title", ""),
@@ -69,7 +59,6 @@ def save_entry_to_gsheets(entry):
             entry.get("total_wrong", 0),
             details_str,
         ]
-
         sheet.append_row(row)
         return True
     except Exception as e:
@@ -85,7 +74,6 @@ READING_TYPES = [
     "Multiple Choice",
     "Gap Fill (Summary/Notes/Sentence)",
 ]
-
 LISTENING_TYPES = [
     "Form / Note / Table Completion",
     "Multiple Choice",
@@ -93,7 +81,6 @@ LISTENING_TYPES = [
     "Map / Plan / Diagram Labelling",
     "Short Answer Questions",
 ]
-
 READING_PARTS = ["Passage 1", "Passage 2", "Passage 3"]
 LISTENING_PARTS = ["Part 1", "Part 2", "Part 3", "Part 4"]
 
@@ -126,12 +113,10 @@ if "all_data" not in st.session_state:
     st.session_state.all_data = load_data_from_gsheets()
 
 st.title("Theo Dõi Luyện Tập IELTS")
-
 col_left, col_right = st.columns([1, 2], gap="large")
 
 with col_left:
     st.subheader("Nhập Bài Làm")
-
     title = st.text_input("1. Tên đề bài", value="Cam 18 - Test 1")
     skill_type = st.radio(
         "2. Kỹ năng", ["Reading", "Listening"], horizontal=True
@@ -179,7 +164,6 @@ with col_left:
     if st.button("Lưu Bài Làm", type="primary", use_container_width=True):
         total_wrong = 0
         detail_errors = []
-
         for p in current_parts:
             for t in current_types:
                 k = f"{skill_type}_{p}_{t}"
@@ -212,7 +196,7 @@ with col_left:
             if save_entry_to_gsheets(entry_data):
                 st.session_state.all_data = load_data_from_gsheets()
                 st.session_state.temp_errors = {}
-                st.success(f"Đã lưu thành công vào Google Sheets: {title}")
+                st.success(f"Đã lưu thành công: {title}")
                 st.rerun()
 
 with col_right:
@@ -222,6 +206,7 @@ with col_right:
     with col_habit:
         st.subheader("Thống Kê Luyện Tập")
         today = datetime.now().date()
+
         day_counts = {}
         for item in all_data:
             if isinstance(item, dict) and "time" in item:
@@ -235,12 +220,13 @@ with col_right:
 
         view_mode = st.radio(
             "Chế độ xem",
-            ["30 Ngày", "Tuần này"],
+            ["Tuần này", "30 Ngày"],
             horizontal=True,
             label_visibility="collapsed",
         )
 
         if view_mode == "Tuần này":
+            week_days_str = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]
             start_of_week = today - timedelta(days=today.weekday())
             days_to_show = [
                 start_of_week + timedelta(days=i) for i in range(7)
@@ -248,7 +234,37 @@ with col_right:
             active_days = sum(
                 1 for d in days_to_show if day_counts.get(d, 0) > 0
             )
-            st.caption(f"Tuần này hoàn thành: {active_days}/7 ngày")
+            st.caption(f"📅 Tuần này: Đã luyện tập {active_days}/7 ngày")
+
+            x_labels = [
+                f"<b>{week_days_str[i]}</b><br>{d.strftime('%d/%m')}"
+                for i, d in enumerate(days_to_show)
+            ]
+            counts = [day_counts.get(d, 0) for d in days_to_show]
+
+            # Biểu diễn theo ô vuông (Heatmap 1 hàng)
+            fig_habit = px.imshow(
+                [counts],
+                labels=dict(x="Ngày", y="", color="Số bài"),
+                x=x_labels,
+                y=[""],
+                color_continuous_scale=[
+                    "#ebedf0",
+                    "#9be9a8",
+                    "#40c463",
+                    "#30a14e",
+                    "#216e39",
+                ],
+                text_auto=True,
+            )
+            fig_habit.update_coloraxes(showscale=False)
+            fig_habit.update_layout(
+                height=180,
+                margin=dict(l=10, r=10, t=10, b=10),
+                xaxis=dict(tickangle=0),
+            )
+            st.plotly_chart(fig_habit, use_container_width=True)
+
         else:
             days_to_show = [
                 (today - timedelta(days=i)) for i in range(29, -1, -1)
@@ -256,28 +272,33 @@ with col_right:
             active_days = sum(
                 1 for d in days_to_show if day_counts.get(d, 0) > 0
             )
-            st.caption(f"30 ngày qua hoàn thành: {active_days}/30 ngày")
+            st.caption(f"📅 30 ngày qua: Đã luyện tập {active_days}/30 ngày")
 
-        habit_df = pd.DataFrame(
-            [
-                {"Ngày": d.strftime("%d/%m"), "Số bài": day_counts.get(d, 0)}
-                for d in days_to_show
-            ]
-        )
-        fig_habit = px.bar(
-            habit_df,
-            x="Ngày",
-            y="Số bài",
-            color="Số bài",
-            color_continuous_scale="Blues",
-            text_auto=True,
-        )
-        fig_habit.update_layout(
-            height=230,
-            margin=dict(l=10, r=10, t=10, b=10),
-            coloraxis_showscale=False,
-        )
-        st.plotly_chart(fig_habit, use_container_width=True)
+            habit_df = pd.DataFrame(
+                [
+                    {
+                        "Ngày": d.strftime("%d/%m"),
+                        "Số bài": day_counts.get(d, 0),
+                    }
+                    for d in days_to_show
+                ]
+            )
+            fig_habit = px.bar(
+                habit_df,
+                x="Ngày",
+                y="Số bài",
+                color="Số bài",
+                color_continuous_scale="Blues",
+                text_auto=True,
+            )
+            # Cố định gốc trục Y từ 0 trở lên
+            fig_habit.update_yaxes(rangemode="tozero", dtick=1)
+            fig_habit.update_layout(
+                height=200,
+                margin=dict(l=10, r=10, t=10, b=10),
+                coloraxis_showscale=False,
+            )
+            st.plotly_chart(fig_habit, use_container_width=True)
 
     with col_chart:
         st.subheader("Phân Bố Lỗi Sai (Lần Gần Nhất)")
