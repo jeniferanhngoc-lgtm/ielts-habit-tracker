@@ -2,8 +2,10 @@ import json
 from datetime import datetime, timedelta
 import gspread
 from google.oauth2.service_account import Credentials
+import numpy as np
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
 st.set_page_config(
@@ -204,7 +206,7 @@ with col_right:
     all_data = st.session_state.all_data
 
     with col_habit:
-        st.subheader("Thống Kê Luyện Tập")
+        st.subheader("Thói Quen Luyện Tập (Habit Grid)")
         today = datetime.now().date()
 
         day_counts = {}
@@ -218,87 +220,78 @@ with col_right:
                 except Exception:
                     pass
 
-        view_mode = st.radio(
-            "Chế độ xem",
-            ["Tuần này", "30 Ngày"],
-            horizontal=True,
-            label_visibility="collapsed",
+        # Chọn khoảng thời gian xem (12 tuần gần nhất (~3 tháng) hoặc 20 tuần)
+        num_weeks = 16
+        start_date = today - timedelta(
+            days=today.weekday() + (num_weeks - 1) * 7
         )
 
-        if view_mode == "Tuần này":
-            week_days_str = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]
-            start_of_week = today - timedelta(days=today.weekday())
-            days_to_show = [
-                start_of_week + timedelta(days=i) for i in range(7)
-            ]
-            active_days = sum(
-                1 for d in days_to_show if day_counts.get(d, 0) > 0
-            )
-            st.caption(f"📅 Tuần này: Đã luyện tập {active_days}/7 ngày")
+        days_list = [start_date + timedelta(days=i) for i in range(num_weeks * 7)]
+        grid_data = np.zeros((7, num_weeks))
+        hover_text = []
 
-            x_labels = [
-                f"<b>{week_days_str[i]}</b><br>{d.strftime('%d/%m')}"
-                for i, d in enumerate(days_to_show)
-            ]
-            counts = [day_counts.get(d, 0) for d in days_to_show]
+        days_of_week = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
-            # Biểu diễn theo ô vuông (Heatmap 1 hàng)
-            fig_habit = px.imshow(
-                [counts],
-                labels=dict(x="Ngày", y="", color="Số bài"),
-                x=x_labels,
-                y=[""],
-                color_continuous_scale=[
-                    "#ebedf0",
-                    "#9be9a8",
-                    "#40c463",
-                    "#30a14e",
-                    "#216e39",
-                ],
-                text_auto=True,
-            )
-            fig_habit.update_coloraxes(showscale=False)
-            fig_habit.update_layout(
-                height=180,
-                margin=dict(l=10, r=10, t=10, b=10),
-                xaxis=dict(tickangle=0),
-            )
-            st.plotly_chart(fig_habit, use_container_width=True)
+        for row in range(7):
+            hover_row = []
+            for col in range(num_weeks):
+                d = start_date + timedelta(days=col * 7 + row)
+                cnt = day_counts.get(d, 0)
+                grid_data[row, col] = cnt
+                hover_row.append(
+                    f"{d.strftime('%Y-%m-%d')} ({days_of_week[row]}): {cnt} bài"
+                )
+            hover_text.append(hover_row)
 
-        else:
-            days_to_show = [
-                (today - timedelta(days=i)) for i in range(29, -1, -1)
-            ]
-            active_days = sum(
-                1 for d in days_to_show if day_counts.get(d, 0) > 0
-            )
-            st.caption(f"📅 30 ngày qua: Đã luyện tập {active_days}/30 ngày")
+        # Nhãn hiển thị tháng ở trục trên
+        week_months = [
+            (start_date + timedelta(days=c * 7)).strftime("%b")
+            for c in range(num_weeks)
+        ]
 
-            habit_df = pd.DataFrame(
-                [
-                    {
-                        "Ngày": d.strftime("%d/%m"),
-                        "Số bài": day_counts.get(d, 0),
-                    }
-                    for d in days_to_show
-                ]
+        # Tùy chỉnh dải màu Cyan/Xanh lá ngọc giống ảnh mẫu LeetCode/GitHub
+        colorscale = [
+            [0.0, "#1f292d"],  # Màu nền tối khi chưa làm bài (0 bài)
+            [0.25, "#134e5e"],  # Xanh ngọc đậm (1 bài)
+            [0.5, "#11998e"],  # Xanh ngọc vừa (2 bài)
+            [0.75, "#00b4d8"],  # Cyan sáng (3 bài)
+            [1.0, "#00f5d4"],  # Cyan nổi bật (>3 bài)
+        ]
+
+        fig_grid = go.Figure(
+            data=go.Heatmap(
+                z=grid_data,
+                x=week_months,
+                y=["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+                text=hover_text,
+                hoverinfo="text",
+                colorscale=colorscale,
+                showscale=False,
+                xgap=3,  # Khoảng cách giữa các ô
+                ygap=3,
             )
-            fig_habit = px.bar(
-                habit_df,
-                x="Ngày",
-                y="Số bài",
-                color="Số bài",
-                color_continuous_scale="Blues",
-                text_auto=True,
-            )
-            # Cố định gốc trục Y từ 0 trở lên
-            fig_habit.update_yaxes(rangemode="tozero", dtick=1)
-            fig_habit.update_layout(
-                height=200,
-                margin=dict(l=10, r=10, t=10, b=10),
-                coloraxis_showscale=False,
-            )
-            st.plotly_chart(fig_habit, use_container_width=True)
+        )
+
+        fig_grid.update_layout(
+            height=240,
+            margin=dict(l=10, r=10, t=25, b=10),
+            plot_bgcolor="#181e24",  # Màu nền tối hợp chuẩn với hình mẫu
+            paper_bgcolor="#0e1117",
+            yaxis=dict(
+                autorange="reversed",
+                showgrid=False,
+                zeroline=False,
+                tickfont=dict(color="#8a99a8", size=11),
+            ),
+            xaxis=dict(
+                showgrid=False,
+                zeroline=False,
+                side="top",
+                tickfont=dict(color="#8a99a8", size=11),
+            ),
+        )
+
+        st.plotly_chart(fig_grid, use_container_width=True)
 
     with col_chart:
         st.subheader("Phân Bố Lỗi Sai (Lần Gần Nhất)")
