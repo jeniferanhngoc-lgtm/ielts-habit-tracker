@@ -117,9 +117,7 @@ with col_left:
     if st.button("💾 Lưu Bài Làm", type="primary", use_container_width=True):
         total_wrong = sum(errors)
         if total_wrong > total_q:
-            st.error(
-                "❌ Tổng số câu sai không thể vượt quá tổng số câu hỏi!"
-            )
+            st.error("❌ Tổng số câu sai không thể vượt quá tổng số câu hỏi!")
         else:
             correct_count = total_q - total_wrong
             score = calculate_score(correct_count, total_q)
@@ -146,9 +144,7 @@ with col_left:
 # CỘT PHẢI: HIỂN THỊ HABIT, BIỂU ĐỒ & BẢNG
 # -----------------------------------------------------
 with col_right:
-    # Hàng trên: Habit Tracker & Biểu đồ tròn
     col_habit, col_chart = st.columns(2)
-
     all_data = st.session_state.all_data
 
     # 1. HABIT TRACKER
@@ -158,13 +154,14 @@ with col_right:
         today = datetime.now().date()
         day_counts = {}
         for item in all_data:
-            try:
-                dt = datetime.strptime(
-                    item["time"], "%Y-%m-%d %H:%M:%S"
-                ).date()
-                day_counts[dt] = day_counts.get(dt, 0) + 1
-            except Exception:
-                pass
+            if isinstance(item, dict) and "time" in item:
+                try:
+                    dt = datetime.strptime(
+                        item["time"], "%Y-%m-%d %H:%M:%S"
+                    ).date()
+                    day_counts[dt] = day_counts.get(dt, 0) + 1
+                except Exception:
+                    pass
 
         view_mode = st.radio(
             "Chế độ xem", ["30 Ngày", "Tuần này"], horizontal=True, label_visibility="collapsed"
@@ -172,9 +169,7 @@ with col_right:
 
         if view_mode == "Tuần này":
             start_of_week = today - timedelta(days=today.weekday())
-            days_to_show = [
-                start_of_week + timedelta(days=i) for i in range(7)
-            ]
+            days_to_show = [start_of_week + timedelta(days=i) for i in range(7)]
             active_days = sum(1 for d in days_to_show if day_counts.get(d, 0) > 0)
             st.caption(f"📅 Tuần này hoàn thành: **{active_days}/7** ngày")
         else:
@@ -182,7 +177,6 @@ with col_right:
             active_days = sum(1 for d in days_to_show if day_counts.get(d, 0) > 0)
             st.caption(f"📅 30 ngày qua hoàn thành: **{active_days}/30** ngày")
 
-        # Chuẩn bị dữ liệu hiển thị heatmap
         habit_df = pd.DataFrame(
             [
                 {
@@ -213,29 +207,30 @@ with col_right:
         st.subheader("📊 Biểu Đồ Lỗi Sai Lần Gần Nhất")
         if all_data:
             latest = all_data[-1]
-            types_list = latest.get("types", [])
-            errors_list = latest.get("errors", [])
+            if isinstance(latest, dict):
+                types_list = latest.get("types", [])
+                errors_list = latest.get("errors", [])
 
-            df_pie = pd.DataFrame(
-                {"Dạng bài": types_list, "Số câu sai": errors_list}
-            )
-            df_pie = df_pie[df_pie["Số câu sai"] > 0]
+                df_pie = pd.DataFrame(
+                    {"Dạng bài": types_list, "Số câu sai": errors_list}
+                )
+                df_pie = df_pie[df_pie["Số câu sai"] > 0]
 
-            if not df_pie.empty:
-                fig_pie = px.pie(
-                    df_pie,
-                    names="Dạng bài",
-                    values="Số câu sai",
-                    hole=0.4,
-                    color_discrete_sequence=px.colors.qualitative.Pastel,
-                )
-                fig_pie.update_layout(
-                    height=260, margin=dict(l=10, r=10, t=10, b=10)
-                )
-                st.plotly_chart(fig_pie, use_container_width=True)
-            else:
-                st.balloons()
-                st.success("🎉 Bài làm gần nhất không sai câu nào!")
+                if not df_pie.empty:
+                    fig_pie = px.pie(
+                        df_pie,
+                        names="Dạng bài",
+                        values="Số câu sai",
+                        hole=0.4,
+                        color_discrete_sequence=px.colors.qualitative.Pastel,
+                    )
+                    fig_pie.update_layout(
+                        height=260, margin=dict(l=10, r=10, t=10, b=10)
+                    )
+                    st.plotly_chart(fig_pie, use_container_width=True)
+                else:
+                    st.balloons()
+                    st.success("🎉 Bài làm gần nhất không sai câu nào!")
         else:
             st.info("Chưa có dữ liệu bài làm.")
 
@@ -245,16 +240,22 @@ with col_right:
     st.subheader("🗓 Lịch Sử Làm Bài")
 
     if all_data:
-        df_display = pd.DataFrame(all_data)[
-            ["time", "title", "type", "correct", "score", "duration", "note"]
-        ]
+        df_all = pd.DataFrame(all_data)
+        
+        # Đảm bảo các cột cần thiết luôn tồn tại
+        required_cols = ["time", "title", "type", "correct", "score", "duration", "note"]
+        for col in required_cols:
+            if col not in df_all.columns:
+                df_all[col] = ""
+
+        df_display = df_all[required_cols]
         df_display.columns = [
             "Thời gian",
             "Tên đề bài",
             "Kỹ năng",
             "Số câu đúng",
             "Band",
-            "Thời gian",
+            "Thời gian làm",
             "Ghi chú",
         ]
 
@@ -262,7 +263,6 @@ with col_right:
 
         col_del, col_exp = st.columns(2)
         with col_exp:
-            # Xuất file TXT / JSON
             json_string = json.dumps(all_data, ensure_ascii=False, indent=4)
             st.download_button(
                 label="📄 Tải Báo Cáo JSON",
