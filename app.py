@@ -64,7 +64,7 @@ def save_entry_to_gsheets(entry):
         sheet.append_row(row)
         return True
     except Exception as e:
-        st.error(f"Lỗi khi lưu vào Google Sheets: {e}")
+        st.error(f"Error saving to Google Sheets: {e}")
         return False
 
 
@@ -114,27 +114,27 @@ def calculate_score(correct_count, total_q):
 if "all_data" not in st.session_state:
     st.session_state.all_data = load_data_from_gsheets()
 
-st.title("Theo Dõi Luyện Tập IELTS")
+st.title("IELTS Practice & Habit Tracker")
 col_left, col_right = st.columns([1, 2], gap="large")
 
 with col_left:
-    st.subheader("Nhập Bài Làm")
-    title = st.text_input("1. Tên đề bài", value="Cam 18 - Test 1")
+    st.subheader("Log Test Results")
+    title = st.text_input("1. Test Title", value="Cam 18 - Test 1")
     skill_type = st.radio(
-        "2. Kỹ năng", ["Reading", "Listening"], horizontal=True
+        "2. Skill", ["Reading", "Listening"], horizontal=True
     )
 
     col_q, col_d = st.columns(2)
     with col_q:
         total_q = st.number_input(
-            "3. Tổng số câu", min_value=1, max_value=200, value=40
+            "3. Total Questions", min_value=1, max_value=200, value=40
         )
     with col_d:
         duration = st.number_input(
-            "4. Thời gian (phút)", min_value=1, max_value=180, value=60
+            "4. Duration (mins)", min_value=1, max_value=180, value=60
         )
 
-    note = st.text_input("5. Ghi chú / Từ vựng cần nhớ")
+    note = st.text_input("5. Notes / Key Vocabulary")
     st.markdown("---")
 
     current_parts = (
@@ -145,13 +145,13 @@ with col_left:
     )
 
     selected_part = st.selectbox(
-        "6. Chọn Phần/Passage để nhập câu sai:", current_parts
+        "6. Select Section/Passage to log errors:", current_parts
     )
 
     if "temp_errors" not in st.session_state:
         st.session_state.temp_errors = {}
 
-    st.markdown(f"**Nhập số câu sai cho [{selected_part}]:**")
+    st.markdown(f"**Incorrect answers for [{selected_part}]:**")
     for q_type in current_types:
         key_name = f"{skill_type}_{selected_part}_{q_type}"
         val = st.number_input(
@@ -163,7 +163,7 @@ with col_left:
         )
         st.session_state.temp_errors[key_name] = val
 
-    if st.button("Lưu Bài Làm", type="primary", use_container_width=True):
+    if st.button("Save Entry", type="primary", use_container_width=True):
         total_wrong = 0
         detail_errors = []
         for p in current_parts:
@@ -177,7 +177,7 @@ with col_left:
                     )
 
         if total_wrong > total_q:
-            st.error("Tổng số câu sai vượt quá tổng số câu hỏi.")
+            st.error("Total incorrect answers exceed total questions.")
         else:
             correct_count = total_q - total_wrong
             score = calculate_score(correct_count, total_q)
@@ -189,7 +189,7 @@ with col_left:
                 "type": skill_type,
                 "correct": f"{correct_count}/{total_q}",
                 "score": score,
-                "duration": f"{duration} phút",
+                "duration": f"{duration} mins",
                 "note": note,
                 "total_wrong": total_wrong,
                 "details": detail_errors,
@@ -198,7 +198,7 @@ with col_left:
             if save_entry_to_gsheets(entry_data):
                 st.session_state.all_data = load_data_from_gsheets()
                 st.session_state.temp_errors = {}
-                st.success(f"Đã lưu thành công: {title}")
+                st.success(f"Saved successfully: {title}")
                 st.rerun()
 
 with col_right:
@@ -206,7 +206,7 @@ with col_right:
     all_data = st.session_state.all_data
 
     with col_habit:
-        st.subheader("Thói Quen Luyện Tập (Habit Grid)")
+        st.subheader("Practice Habit Grid")
         today = datetime.now().date()
 
         day_counts = {}
@@ -220,16 +220,26 @@ with col_right:
                 except Exception:
                     pass
 
-        # Hiển thị 18 tuần gần nhất (~4 tháng)
-        num_weeks = 18
+        num_weeks = 20
         start_date = today - timedelta(
             days=today.weekday() + (num_weeks - 1) * 7
         )
 
         grid_data = np.zeros((7, num_weeks))
         hover_text = []
+        x_labels = []
 
         days_of_week = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        last_month = None
+
+        for col in range(num_weeks):
+            week_start_date = start_date + timedelta(days=col * 7)
+            current_month = week_start_date.strftime("%b")
+            if current_month != last_month:
+                x_labels.append(current_month)
+                last_month = current_month
+            else:
+                x_labels.append("")
 
         for row in range(7):
             hover_row = []
@@ -238,34 +248,28 @@ with col_right:
                 cnt = day_counts.get(d, 0)
                 grid_data[row, col] = cnt
                 hover_row.append(
-                    f"{d.strftime('%Y-%m-%d')} ({days_of_week[row]}): {cnt} bài"
+                    f"{d.strftime('%Y-%m-%d')} ({days_of_week[row]}): {cnt} test(s)"
                 )
             hover_text.append(hover_row)
 
-        week_months = [
-            (start_date + timedelta(days=c * 7)).strftime("%b")
-            for c in range(num_weeks)
-        ]
-
-        # Palette màu sáng: Nền chưa làm là màu xám nhạt, làm càng nhiều bài màu xanh/cyan càng đậm
         colorscale = [
-            [0.0, "#ebedf0"],  # Chưa làm bài (xám nhạt)
-            [0.25, "#9be9a8"],  # Xanh nhạt (1 bài)
-            [0.5, "#40c463"],   # Xanh lá vừa (2 bài)
-            [0.75, "#30a14e"],  # Xanh đậm (3 bài)
-            [1.0, "#216e39"],   # Xanh lá rất đậm (>3 bài)
+            [0.0, "#ebedf0"],  # No practice
+            [0.25, "#9be9a8"],  # 1 test
+            [0.5, "#40c463"],  # 2 tests
+            [0.75, "#30a14e"],  # 3 tests
+            [1.0, "#216e39"],  # >=4 tests
         ]
 
         fig_grid = go.Figure(
             data=go.Heatmap(
                 z=grid_data,
-                x=week_months,
+                x=list(range(num_weeks)),
                 y=["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
                 text=hover_text,
                 hoverinfo="text",
                 colorscale=colorscale,
                 showscale=False,
-                xgap=3,  # Khoảng cách giữa các ô vuông
+                xgap=3,
                 ygap=3,
             )
         )
@@ -273,20 +277,24 @@ with col_right:
         fig_grid.update_layout(
             height=200,
             margin=dict(l=0, r=0, t=25, b=0),
-            plot_bgcolor="rgba(0,0,0,0)",   # Trong suốt khớp màu web
-            paper_bgcolor="rgba(0,0,0,0)",  # Trong suốt khớp màu web
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
             yaxis=dict(
                 autorange="reversed",
                 showgrid=False,
                 zeroline=False,
                 tickfont=dict(color="#31333F", size=11),
-                scaleanchor="x",  # Ép trục Y theo trục X để tạo ô vuông (Square)
+                scaleanchor="x",
                 scaleratio=1,
+                constrain="domain",  # Fixes padding between Y-axis labels and grid
             ),
             xaxis=dict(
                 showgrid=False,
                 zeroline=False,
                 side="top",
+                tickmode="array",
+                tickvals=list(range(num_weeks)),
+                ticktext=x_labels,
                 tickfont=dict(color="#31333F", size=11),
             ),
         )
@@ -294,7 +302,7 @@ with col_right:
         st.plotly_chart(fig_grid, use_container_width=True)
 
     with col_chart:
-        st.subheader("Phân Bố Lỗi Sai (Lần Gần Nhất)")
+        st.subheader("Error Distribution (Latest)")
         if all_data:
             latest = all_data[-1]
             details = latest.get("details", [])
@@ -321,12 +329,12 @@ with col_right:
                 )
                 st.plotly_chart(fig_pie, use_container_width=True)
             else:
-                st.info("Bài làm gần nhất không có câu sai.")
+                st.info("No errors recorded in the latest session.")
         else:
-            st.info("Chưa có dữ liệu bài làm.")
+            st.info("No test history available.")
 
     st.markdown("---")
-    st.subheader("Lịch Sử Làm Bài")
+    st.subheader("Practice History")
 
     if all_data:
         df_all = pd.DataFrame(all_data)
@@ -345,13 +353,13 @@ with col_right:
 
         df_display = df_all[required_cols]
         df_display.columns = [
-            "Thời gian",
-            "Tên đề bài",
-            "Kỹ năng",
-            "Số câu đúng",
-            "Band",
-            "Thời gian làm",
-            "Ghi chú",
+            "Timestamp",
+            "Test Title",
+            "Skill",
+            "Correct",
+            "Band Score",
+            "Duration",
+            "Notes",
         ]
         st.dataframe(
             df_display.iloc[::-1], use_container_width=True, hide_index=True
