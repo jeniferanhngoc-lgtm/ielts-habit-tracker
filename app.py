@@ -1,31 +1,42 @@
 import json
 from datetime import datetime, timedelta
+import gspread
+from google.oauth2.service_account import Credentials
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from streamlit_gspread import GSpreadConnector
 
 st.set_page_config(
     page_title="IELTS Practice & Habit Tracker", layout="wide"
 )
 
-# Tên Google Sheet và Tab theo đúng thiết lập của bạn
+# Tên Google Sheet và Tab của bạn
 SHEET_NAME = "IELTS TRACKER"
 WORKSHEET_NAME = "History"
 
 
+# Kết nối Google Sheets bằng gspread chính thức
 @st.cache_resource(ttl=600)
-def get_gsheets_connection():
-    return st.connection("gspread", type=GSpreadConnector)
+def get_gsheet_client():
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    # Lấy thông tin từ secrets
+    credentials_dict = dict(st.secrets["gspread"])
+    creds = Credentials.from_service_account_info(
+        credentials_dict, scopes=scopes
+    )
+    client = gspread.authorize(creds)
+    return client
 
 
 def load_data_from_gsheets():
     try:
-        conn = get_gsheets_connection()
-        df = conn.read(spreadsheet=SHEET_NAME, worksheet=WORKSHEET_NAME)
-        if df.empty:
-            return []
-        records = df.to_dict(orient="records")
+        client = get_gsheet_client()
+        sheet = client.open(SHEET_NAME).worksheet(WORKSHEET_NAME)
+        records = sheet.get_all_records()
+
         for item in records:
             if "details" in item and isinstance(item["details"], str):
                 try:
@@ -33,31 +44,33 @@ def load_data_from_gsheets():
                 except Exception:
                     item["details"] = []
         return records
-    except Exception:
+    except Exception as e:
+        st.error(f"Lỗi khi tải dữ liệu từ Google Sheets: {e}")
         return []
 
 
 def save_entry_to_gsheets(entry):
     try:
-        conn = get_gsheets_connection()
-        entry_to_save = entry.copy()
-        entry_to_save["details"] = json.dumps(
-            entry_to_save.get("details", []), ensure_ascii=False
-        )
+        client = get_gsheet_client()
+        sheet = client.open(SHEET_NAME).worksheet(WORKSHEET_NAME)
 
-        df_new = pd.DataFrame([entry_to_save])
-        existing_df = conn.read(
-            spreadsheet=SHEET_NAME, worksheet=WORKSHEET_NAME
-        )
+        # Chuyển mảng details thành chuỗi JSON
+        details_str = json.dumps(entry.get("details", []), ensure_ascii=False)
 
-        if existing_df.empty:
-            updated_df = df_new
-        else:
-            updated_df = pd.concat([existing_df, df_new], ignore_index=True)
+        # Chuẩn bị dòng dữ liệu đúng thứ tự các cột
+        row = [
+            entry.get("time", ""),
+            entry.get("title", ""),
+            entry.get("type", ""),
+            entry.get("correct", ""),
+            entry.get("score", ""),
+            entry.get("duration", ""),
+            entry.get("note", ""),
+            entry.get("total_wrong", 0),
+            details_str,
+        ]
 
-        conn.update(
-            spreadsheet=SHEET_NAME, worksheet=WORKSHEET_NAME, data=updated_df
-        )
+        sheet.append_row(row)
         return True
     except Exception as e:
         st.error(f"Lỗi khi lưu vào Google Sheets: {e}")
